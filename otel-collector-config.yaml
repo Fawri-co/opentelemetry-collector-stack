@@ -21,7 +21,7 @@ exporters:
   # SigNoz exporter via OTLP
   # SigNoz accepts both traces and metrics via OTLP
   otlp/signoz:
-    endpoint: signoz.railway.internal:4317
+    endpoint: signoz-otel-collector.railway.internal:4317
     tls:
       insecure: true
     headers:
