@@ -1,5 +1,5 @@
-# OpenTelemetry Collector Configuration for Railway with SigNoz
-# This configuration sends traces and metrics to SigNoz instead of Jaeger
+# OpenTelemetry Collector Configuration for SigNoz (HTTP)
+# Use this if gRPC port 4317 is not accessible
 
 receivers:
   otlp:
@@ -10,49 +10,22 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 exporters:
-  # Debug exporter for troubleshooting
   debug:
     verbosity: detailed
 
-  # Logging exporter for debugging
   logging:
     verbosity: normal
 
-  # SigNoz exporter via OTLP
-  # SigNoz accepts both traces and metrics via OTLP
-  otlp/signoz:
-    endpoint: signoz-otel-collector.railway.internal:4317
+  # SigNoz exporter via OTLP HTTP (instead of gRPC)
+  otlphttp/signoz:
+    endpoint: http://signoz-otel-collector.railway.internal:4318
     tls:
       insecure: true
-    headers:
-      # Add your SigNoz ingestion key if using SigNoz Cloud
-      # "signoz-access-token": "your-token-here"
-
-  # Optional: Keep Zipkin as backup
-  zipkin:
-    endpoint: "http://zipkin.railway.internal:9411/api/v2/spans"
-    format: proto
-
-  # Prometheus exporter (for Prometheus if you still want it)
-  prometheus:
-    endpoint: "0.0.0.0:8889"
-    const_labels:
-      collector: "otel"
 
 processors:
   batch:
     timeout: 10s
     send_batch_size: 1024
-  
-  # Resource processor to add service metadata
-  resource:
-    attributes:
-      - key: service.name
-        value: advanced-messenger-service
-        action: upsert
-      - key: deployment.environment
-        value: production
-        action: upsert
 
 extensions:
   health_check:
@@ -68,13 +41,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch, resource]
-      exporters: [logging, otlp/signoz, debug]
+      processors: [batch]
+      exporters: [logging, otlphttp/signoz, debug]
     
     metrics:
       receivers: [otlp]
-      processors: [batch, resource]
-      exporters: [logging, otlp/signoz, prometheus, debug]
+      processors: [batch]
+      exporters: [logging, otlphttp/signoz, debug]
 
   telemetry:
     logs:
@@ -82,10 +55,6 @@ service:
     metrics:
       address: 0.0.0.0:8888
 
-# NOTES:
-# 1. SigNoz accepts both traces AND metrics via OTLP
-# 2. Default SigNoz OTLP receiver port is 4317 (gRPC) or 4318 (HTTP)
-# 3. SigNoz UI is typically on port 3301
-# 4. If using SigNoz Cloud, update endpoint to: ingest.{region}.signoz.cloud:443
-#    and set tls.insecure: false
+# NOTE: Using OTLP HTTP (port 4318) instead of gRPC (port 4317)
+# This is more reliable in some network configurations
 
