@@ -1,5 +1,5 @@
-# OpenTelemetry Collector Configuration for Railway
-# Updated with correct service names and endpoints
+# OpenTelemetry Collector Configuration for Railway with SigNoz
+# This configuration sends traces and metrics to SigNoz instead of Jaeger
 
 receivers:
   otlp:
@@ -14,35 +14,45 @@ exporters:
   debug:
     verbosity: detailed
 
-  # Prometheus metrics exporter
+  # Logging exporter for debugging
+  logging:
+    verbosity: normal
+
+  # SigNoz exporter via OTLP
+  # SigNoz accepts both traces and metrics via OTLP
+  otlp/signoz:
+    endpoint: signoz.railway.internal:4317
+    tls:
+      insecure: true
+    headers:
+      # Add your SigNoz ingestion key if using SigNoz Cloud
+      # "signoz-access-token": "your-token-here"
+
+  # Optional: Keep Zipkin as backup
+  zipkin:
+    endpoint: "http://zipkin.railway.internal:9411/api/v2/spans"
+    format: proto
+
+  # Prometheus exporter (for Prometheus if you still want it)
   prometheus:
     endpoint: "0.0.0.0:8889"
     const_labels:
       collector: "otel"
 
-  # Logging exporter for debugging
-  logging:
-    loglevel: info
-
-  # Zipkin exporter
-  # NOTE: Update the hostname if your Zipkin service has a different name
-  zipkin:
-    endpoint: "http://zipkin.railway.internal:9411/api/v2/spans"
-    format: proto
-
-  # Jaeger exporter via OTLP
-  # Your Jaeger service is named "all-in-one" in Railway
-  # Port 4317 is for receiving traces (OTLP gRPC)
-  # Port 16686 is only for the UI, not for receiving traces!
-  otlp/jaeger:
-    endpoint: all-in-one.railway.internal:4317
-    tls:
-      insecure: true
-
 processors:
   batch:
     timeout: 10s
     send_batch_size: 1024
+  
+  # Resource processor to add service metadata
+  resource:
+    attributes:
+      - key: service.name
+        value: advanced-messenger-service
+        action: upsert
+      - key: deployment.environment
+        value: production
+        action: upsert
 
 extensions:
   health_check:
@@ -58,33 +68,24 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging, zipkin, otlp/jaeger, debug]
+      processors: [batch, resource]
+      exporters: [logging, otlp/signoz, debug]
     
     metrics:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging, prometheus, debug]
+      processors: [batch, resource]
+      exporters: [logging, otlp/signoz, prometheus, debug]
 
-  # Telemetry configuration
   telemetry:
     logs:
       level: info
     metrics:
       address: 0.0.0.0:8888
 
-# IMPORTANT: Update these hostnames based on your actual Railway service names
-# 
-# To find your service names:
-# 1. Go to Railway project
-# 2. Click on each service (Jaeger, Zipkin)
-# 3. The service name is at the top of the page
-# 4. Internal hostname is: <service-name>.railway.internal
-#
-# Common variations:
-# - jaeger.railway.internal
-# - Jaeger.railway.internal (case-sensitive!)
-# - jaeger-service.railway.internal
-# - zipkin.railway.internal
-# - Zipkin.railway.internal
+# NOTES:
+# 1. SigNoz accepts both traces AND metrics via OTLP
+# 2. Default SigNoz OTLP receiver port is 4317 (gRPC) or 4318 (HTTP)
+# 3. SigNoz UI is typically on port 3301
+# 4. If using SigNoz Cloud, update endpoint to: ingest.{region}.signoz.cloud:443
+#    and set tls.insecure: false
 
