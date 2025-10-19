@@ -1,5 +1,6 @@
-# OpenTelemetry Collector Configuration for SigNoz (HTTP)
-# Use this if gRPC port 4317 is not accessible
+# OpenTelemetry Collector Configuration for SigNoz Cloud
+# Region: US
+# Endpoint: ingest.us.signoz.cloud:443
 
 receivers:
   otlp:
@@ -10,22 +11,36 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 exporters:
+  # Debug exporter for troubleshooting
   debug:
     verbosity: detailed
 
+  # Logging exporter for debugging
   logging:
     verbosity: normal
 
-  # SigNoz exporter via OTLP HTTP (instead of gRPC)
-  otlphttp/signoz:
-    endpoint: http://signoz-otel-collector.railway.internal:4318
+  # SigNoz Cloud exporter via OTLP
+  otlp/signoz:
+    endpoint: ingest.us.signoz.cloud:443
+    headers:
+      "signoz-access-token": "${SIGNOZ_ACCESS_TOKEN}"
     tls:
-      insecure: true
+      insecure: false  # Use TLS for cloud
 
 processors:
   batch:
     timeout: 10s
     send_batch_size: 1024
+  
+  # Resource processor to add service metadata
+  resource:
+    attributes:
+      - key: service.name
+        value: advanced-messenger-service
+        action: upsert
+      - key: deployment.environment
+        value: production
+        action: upsert
 
 extensions:
   health_check:
@@ -41,13 +56,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging, otlphttp/signoz, debug]
+      processors: [batch, resource]
+      exporters: [logging, otlp/signoz, debug]
     
     metrics:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging, otlphttp/signoz, debug]
+      processors: [batch, resource]
+      exporters: [logging, otlp/signoz, debug]
 
   telemetry:
     logs:
@@ -55,6 +70,7 @@ service:
     metrics:
       address: 0.0.0.0:8888
 
-# NOTE: Using OTLP HTTP (port 4318) instead of gRPC (port 4317)
-# This is more reliable in some network configurations
+# Configuration for SigNoz Cloud US Region
+# Access Token: Set via SIGNOZ_ACCESS_TOKEN environment variable
+# UI Access: https://app.signoz.io/
 
