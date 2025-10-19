@@ -1,47 +1,90 @@
+# OpenTelemetry Collector Configuration for Railway
+# Updated with correct service names and endpoints
+
 receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: 0.0.0.0:4317
       http:
+        endpoint: 0.0.0.0:4318
 
 exporters:
+  # Debug exporter for troubleshooting
   debug:
     verbosity: detailed
 
+  # Prometheus metrics exporter
   prometheus:
     endpoint: "0.0.0.0:8889"
     const_labels:
-      label1: value1
+      collector: "otel"
 
+  # Logging exporter for debugging
   logging:
+    loglevel: info
 
+  # Zipkin exporter
+  # NOTE: Update the hostname if your Zipkin service has a different name
   zipkin:
     endpoint: "http://zipkin.railway.internal:9411/api/v2/spans"
     format: proto
 
+  # Jaeger exporter via OTLP
+  # Your Jaeger service is named "all-in-one" in Railway
+  # Port 4317 is for receiving traces (OTLP gRPC)
+  # Port 16686 is only for the UI, not for receiving traces!
   otlp/jaeger:
-    endpoint: jaeger.railway.internal:4317
+    endpoint: all-in-one.railway.internal:4317
     tls:
       insecure: true
 
 processors:
   batch:
+    timeout: 10s
+    send_batch_size: 1024
 
 extensions:
   health_check:
+    endpoint: 0.0.0.0:13133
   pprof:
-    endpoint: :1888
+    endpoint: 0.0.0.0:1888
   zpages:
-    endpoint: :55679
+    endpoint: 0.0.0.0:55679
 
 service:
   extensions: [pprof, zpages, health_check]
+  
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
       exporters: [logging, zipkin, otlp/jaeger, debug]
+    
     metrics:
       receivers: [otlp]
       processors: [batch]
       exporters: [logging, prometheus, debug]
+
+  # Telemetry configuration
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+
+# IMPORTANT: Update these hostnames based on your actual Railway service names
+# 
+# To find your service names:
+# 1. Go to Railway project
+# 2. Click on each service (Jaeger, Zipkin)
+# 3. The service name is at the top of the page
+# 4. Internal hostname is: <service-name>.railway.internal
+#
+# Common variations:
+# - jaeger.railway.internal
+# - Jaeger.railway.internal (case-sensitive!)
+# - jaeger-service.railway.internal
+# - zipkin.railway.internal
+# - Zipkin.railway.internal
+
